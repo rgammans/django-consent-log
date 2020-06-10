@@ -1,0 +1,16 @@
+*/__pycache__/*
+.tox/*
+*.egg-info/
+
+*~
+*.pyc
+*.orig
+*.rej
+*.sw[a-p]
+
+
+*LOCAL*
+*REMOTE*
+*BACKUP*
+*BASE*
+
