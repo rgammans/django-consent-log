@@ -1,7 +1,17 @@
 from django.db import models
+from django.conf import settings
 from .apps import app_name
+import datetime
+
+class ConsentQuerySet(models.QuerySet):
+    def delete_expired(self,):
+        expires = datetime.datetime.now() - datetime.timedelta(days = settings.CONSENT_DAYS_EXPIRY)
+        return self.filter(confirmed_on__lt = expires).delete()
 
 class ConsentRecord(models.Model):
+
+    objects = ConsentQuerySet.as_manager()
+
     token = models.CharField(max_length =512)
     confirmed_on = models.DateTimeField(auto_now_add = True)
     ip_address= models.BinaryField( max_length = 16 )

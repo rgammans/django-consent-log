@@ -51,10 +51,12 @@ TEMPLATES = [
         'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
-        },
+        }
     },
 ]
 INSTALLED_APPS = (
     'consent_log',
 )
+
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'
+CONSENT_DAYS_EXPIRY = 90

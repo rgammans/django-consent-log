@@ -14,7 +14,9 @@ import unittest
 import datetime
 from django.test import TestCase, RequestFactory, Client
 from django import urls
+from django.conf import settings
 
+from django.conf import settings
 from consent_log import models
 from consent_log import views
 
@@ -76,6 +78,40 @@ class ConsentLogRequestTests(TestCase):
         self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("reject","reject_request_can_be_made", False)
 
 
+class ConsentLogQuerySetTests(TestCase):
+   
+    def setUp(self,):
+        #TODO read from settings
+        self.expiry_days = settings.CONSENT_DAYS_EXPIRY
+        blocksz = 10
+        self.length = self.expiry_days // (blocksz // 2)
+#        expiry = datetime.timedelta(days=expiry_days)
+        nxtdelay =datetime.timedelta(days = blocksz)
+        ts = datetime.datetime.now()
+        for i in range(self.length):
+            r = models.ConsentRecord.objects.create(
+                confirmed_on = ts,
+                token = f"tst{i}",
+                user_agent = "use user_agent",
+                status=b"Yes",
+                status_flag =  True,
+                referrer = ""
+            )
+            # Force tsimestamp
+            r.confirmed_on = ts
+            r.save()
+            ts = ts - nxtdelay
+
+ 
+    def test_delete_expired_deletes_expired_records_and_keeps_unexpired(self,):
+        models.ConsentRecord.objects.delete_expired()
+        self.assertGreater( min(r.confirmed_on 
+            for r in models.ConsentRecord.objects.all()
+        ), datetime.datetime.now() - datetime.timedelta(days= self.expiry_days))
+        ## It should be exactly half but we need to cope with length being odd
+        #  so we compare > 40% and < 60%. When dhoe be find as long a length> 10
+        self.assertLess(models.ConsentRecord.objects.all().count(),self.length*.6)
+        self.assertGreater(models.ConsentRecord.objects.all().count(),self.length*.4)
 
 
 class MockRequest:
