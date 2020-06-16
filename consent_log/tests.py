@@ -11,6 +11,7 @@ Specifcally the following information is stored
 
 """
 import unittest
+import unittest.mock
 import datetime
 from django.test import TestCase, RequestFactory, Client
 from django import urls
@@ -48,6 +49,33 @@ class ConsentLogRequestTests(TestCase):
     def test_reject_request_stores_the_data_in_the_model_and_consent_is_corect_value(self,):
         self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("reject","reject_request_can_be_made", False)
 
+    def test_reject_request_calls_expire_consent_log_if_auto_expire_set(self,):
+        settings.CONSENT_LOG_AUTO_EXPIRE= True
+        with  unittest.mock.patch.object(models,'expire_consent_log') as ecl:
+            self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("reject","reject_request_can_be_made", False)
+        ecl.assert_called_with(reason = "Auto Expiry")
+
+
+    def test_confirm_request_calls_expire_consent_log_if_auto_expire_set(self,):
+        settings.CONSENT_LOG_AUTO_EXPIRE= True
+        with  unittest.mock.patch.object(models,'expire_consent_log') as ecl:
+            self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("confirm","confirm_auto-expires", True)
+        ecl.assert_called_with(reason = "Auto Expiry")
+
+    def test_reject_request_deosnt_calls_expire_consent_log_if_auto_expire_unset(self,):
+        settings.CONSENT_LOG_AUTO_EXPIRE= False
+        with  unittest.mock.patch.object(models,'expire_consent_log') as ecl:
+            self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("reject","reject_request_can_be_made", False)
+        ecl.assert_not_called()
+
+
+    def test_confirm_request_doesntcalls_expire_consent_log_if_auto_expire_unset(self,):
+        settings.CONSENT_LOG_AUTO_EXPIRE= False
+        with  unittest.mock.patch.object(models,'expire_consent_log') as ecl:
+            self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("confirm","conrirm_auto-expires", True)
+        ecl.assert_not_called()
+
+
 
     def dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value(self,url,testname ,consentValue):
         log_entries_known = set(models.ConsentRecord.objects.all().values_list('pk'))
@@ -71,7 +99,12 @@ class ConsentLogRequestTests(TestCase):
         self.user_agent_string = ''.join( [ 'x'] * oversized_len)
         self.dotest_request_stores_the_data_in_the_model_and_consent_is_corect_value("reject","reject_request_can_be_made", False)
 
-    @unittest.skip('need to decide what counts as an oversized body. The Web frontedn normallr rekects those')
+    @unittest.skip('''
+            Before this is usefule we should decide what counts as an oversized body,
+            and of a size need to be able to handle
+
+            Most frontend webservers set a content input limit anyway.
+    ''')
     def test_request_doesnt_crash_with_oversized_bodies(self,):
         oversized_len =  65
         self.body = b''.join( [ b'x'] * oversized_len)
@@ -82,7 +115,7 @@ class ConsentLogQuerySetTests(TestCase):
    
     def setUp(self,):
         #TODO read from settings
-        self.expiry_days = settings.CONSENT_DAYS_EXPIRY
+        self.expiry_days = settings.CONSENT_LOG_DAYS_EXPIRY
         blocksz = 10
         self.length = self.expiry_days // (blocksz // 2)
 #        expiry = datetime.timedelta(days=expiry_days)
@@ -146,3 +179,44 @@ class UtilFunctionsTests(TestCase):
         body = req.body
         del req.headers['Content-Type']
         self.assertEqual(views.decapsulate_body(req),body.strip())
+
+
+class ExpireConsetLogTests(TestCase):
+
+    def test_expire_consent_log_calls_qs_delete_expired(self,):
+        with unittest.mock.patch.object(models.ConsentRecord.objects,'delete_expired') as de:
+            models.expire_consent_log()
+
+        de.assert_called_once()
+
+    def test_expire_consent_log_inserts_into_the_expiry_log(self,):
+        records = models.ExpiryLog.objects.all().count()
+        models.expire_consent_log()
+        self.assertEqual(models.ExpiryLog.objects.all().count(),records + 1)
+
+    def test_expire_conset_log_inserts_into_the_expiry_log_with_passed_reason_value(self,):
+        reason = "Test reason for expiry"
+        log_entries_known = set(models.ExpiryLog.objects.all().values_list('pk'))
+        models.expire_consent_log(reason = reason)
+        new_logs = set(models.ExpiryLog.objects.all().values_list('pk'))
+        new_entry = new_logs -  log_entries_known
+        self.assertEqual(len(new_entry),1)
+        new_entry = next(iter(new_entry))
+        new_record = models.ExpiryLog.objects.get(pk=new_entry[0])
+        self.assertEqual(new_record.run_reason,reason)
+
+    def test_expire_cosent_log_deosnt_run_if_there_is_reecent_expiry(self,):
+        ##Nb test app sett max Period to 7 days.abs
+        models.ExpiryLog.objects.create(run_reason="dummy run for test")
+        with unittest.mock.patch.object(models.ConsentRecord.objects,'delete_expired') as de:
+            models.expire_consent_log()
+
+        de.assert_not_called()
+
+    def test_expire_cosent_log_deos_run_if_there_is_reecent_expiry_but_force_is_specified(self,):
+        ##Nb test app sett max Period to 7 days.abs
+        models.ExpiryLog.objects.create(run_reason="dummy run for test")
+        with unittest.mock.patch.object(models.ConsentRecord.objects,'delete_expired') as de:
+            models.expire_consent_log(force= True)
+
+        de.assert_called_once()

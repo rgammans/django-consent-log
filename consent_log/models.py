@@ -3,9 +3,29 @@ from django.conf import settings
 from .apps import app_name
 import datetime
 
+
+def expire_consent_log(**kwargs ):
+    """Delete on and expired reords in the ConsentLog. If time for a expiry run.
+
+    This is an entry point for checking any configured expiry policy
+    before running the consetn expiry functions.
+
+    """
+    reason = kwargs.get('reason','unspecified')
+    force = kwargs.get('force',False)
+    run_threshold = datetime.datetime.now() - datetime.timedelta(days = settings.CONSENT_LOG_EXPIRY_MIN_PERIOD)
+    if force or not ExpiryLog.objects.filter(date_run__gt = run_threshold).exists():
+        ExpiryLog.objects.create(run_reason=reason)
+        ConsentRecord.objects.delete_expired()
+
+class ExpiryLog(models.Model):
+    date_run = models.DateTimeField(auto_now_add = True)
+    run_reason = models.CharField(max_length =200)
+
+
 class ConsentQuerySet(models.QuerySet):
     def delete_expired(self,):
-        expires = datetime.datetime.now() - datetime.timedelta(days = settings.CONSENT_DAYS_EXPIRY)
+        expires = datetime.datetime.now() - datetime.timedelta(days = settings.CONSENT_LOG_DAYS_EXPIRY)
         return self.filter(confirmed_on__lt = expires).delete()
 
 class ConsentRecord(models.Model):

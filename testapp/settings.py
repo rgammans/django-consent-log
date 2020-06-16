@@ -59,4 +59,7 @@ INSTALLED_APPS = (
 )
 
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'
-CONSENT_DAYS_EXPIRY = 90
+CONSENT_LOG_DAYS_EXPIRY = 90
+CONSENT_LOG_EXPIRY_MIN_PERIOD = 7 # Only run expiry once a week maxmum.
+CONSENT_LOG_AUTO_EXPIRE = False
+

@@ -1,5 +1,7 @@
 from django.views import View
 from django.http import HttpResponse
+from django.conf import settings
+
 from . import models
 
 def decapsulate_body(request):
@@ -34,6 +36,8 @@ class ConsentView(View):
             status = decapsulate_body(request),
             status_flag = self.status_flag,
         )
+        if settings.CONSENT_LOG_AUTO_EXPIRE:
+            models.expire_consent_log(reason = "Auto Expiry")
         return HttpResponse('')
 
 
